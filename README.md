@@ -1,171 +1,173 @@
-# Aurora Cloud GitOps 
-This repository defines the GitOps source of truth for Aurora's Kubernetes runtime, including platform components (Kubernetes, Istio), shared infrastructure dependencies, and application workloads. It is designed to clearly separate **local development**, **cluster-level platform concerns**, and **production-grade application delivery**.
+# Aurora Cloud GitOps
 
-## Design Principles 
-### Strict separation of concerns 
-- Source code repos handle build & CI 
-- This repo handles deployment state only 
+This repository defines the GitOps source of truth for Aurora's Kubernetes runtime, including **platform components**, **shared infrastructure dependencies**, and **application workloads**. It is designed to clearly separate **local development**, **cluster-level platform concerns**, and **production-grade application delivery**.
 
-### Environment isolation 
-- `dev` -> local dependency simulation / port-forward friendly 
-- `prod` -> real cluster services using `svc.cluster.local`
+## Design Principles
 
-### Kustomize-first 
-- No Helm templating logic in apps 
-- Git diff = actual runtime diff 
+## Diagram 
+```mermaid
+flowchart TD
+    subgraph Local Dev
+        direction TB
+        DEV_OVERLAY["k8s/overlays/dev"]
+        LOCAL_DEPS["Port-forwarded Services\n(Postgres, RabbitMQ, Redis)"]
+        DEV_APP["Aurora Apps\n(local Docker images optional)"]
+        DEV_OVERLAY --> DEV_APP
+        DEV_APP --> LOCAL_DEPS
+    end
 
-### Istio-native 
-- Ingress, traffic routing, security live in GitOps 
-- No legacy API Gateway module 
+    subgraph CI/CD
+        direction TB
+        CI["Build & Test Aurora Images"]
+        IMAGE_REG["Docker Registry"]
+        CI --> IMAGE_REG
+    end
 
+    subgraph GitOps
+        direction TB
+        K8S_BASE["k8s/base"]
+        PROD_OVERLAY["k8s/overlays/prod"]
+        ARGOCD["ArgoCD"]
+        TF["Terraform (Optional)"]
+        PROD_OVERLAY --> ARGOCD
+        K8S_BASE --> PROD_OVERLAY
+        TF --> PROD_OVERLAY
+        ARGOCD --> PROD_CLUSTER["Prod K8s Cluster"]
+    end
 
-## Repository Layout 
+    subgraph Prod Cluster
+        direction TB
+        ISTIO_CP["Istio Control Plane\n(IngressGateway, Sidecars)"]
+        PROD_APP["Aurora Apps\n(prod images)"]
+        BACKING_SVC["Prod Services\n(Postgres, RabbitMQ, Redis)"]
+        ISTIO_CP --> PROD_APP
+        PROD_APP --> BACKING_SVC
+    end
+
+    IMAGE_REG --> PROD_OVERLAY
 ```
-aurora-cloud-gitops
+
+### Strict separation of concerns
+
+* Source code repos handle **build & CI**.
+* This repo handles **deployment state only**.
+
+### Environment isolation
+
+* `dev` → local dependency simulation, port-forward friendly.
+* `prod` → real cluster services using `*.svc.cluster.local`.
+
+### Kustomize-first
+
+* No Helm templating logic in apps.
+* Git diff = actual runtime diff.
+
+### Istio-native
+
+* Ingress, traffic routing, and security live in GitOps.
+* Legacy API Gateway modules are removed.
+
+---
+
+## Repository Layout
+
+```
+aurora-gitops/
 ├── README.md
-│
-├── clusters
-│ ├── dev-kind
-│ │ ├── kustomization.yaml
-│ │ ├── namespace.yaml
-│ │ └── apps
-│ │ └── aurora
-│ │ └── kustomization.yaml
-│ │
-│ └── prod
-│ ├── kustomization.yaml
-│ ├── namespace.yaml
-│ └── apps
-│ └── aurora
-│ └── kustomization.yaml
-│
-├── platform
-│ ├── k8s
-│ │ └── namespaces.yaml
-│ │
-│ ├── istio
-│ │ ├── base
-│ │ │ ├── istio-base.yaml
-│ │ │ └── kustomization.yaml
-│ │ ├── ingress
-│ │ │ ├── gateway.yaml
-│ │ │ ├── virtualservice.yaml
-│ │ │ └── kustomization.yaml
-│ │ └── overlays
-│ │ └── prod
-│ │ └── kustomization.yaml
-│ │
-│ └── security
-│ └── oauth2-proxy
-│ ├── deployment.yaml
-│ ├── service.yaml
-│ └── kustomization.yaml
-│
-├── infra
-│ ├── local-deps
-│ │ ├── base
-│ │ │ ├── postgres.yaml
-│ │ │ ├── rabbitmq.yaml
-│ │ │ └── kustomization.yaml
-│ │ └── overlays
-│ │ └── dev
-│ │ ├── namespace.yaml
-│ │ ├── patch-postgres.yaml
-│ │ ├── patch-rabbitmq.yaml
-│ │ └── kustomization.yaml
-│ │
-│ └── prod-deps
-│ ├── postgres
-│ │ ├── statefulset.yaml
-│ │ ├── service.yaml
-│ │ └── kustomization.yaml
-│ └── rabbitmq
-│ ├── deployment.yaml
-│ ├── service.yaml
-│ └── kustomization.yaml
-│
-└── apps
-└── aurora
-├── base
-│ ├── deployment.yaml
-│ ├── service.yaml
-│ ├── configmap.yaml
-│ └── kustomization.yaml
-│
-└── patch-env.yaml
+├── terraform/                   # Optional infra-as-code supplement
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── k8s/
+│   ├── base/                     # All modules' base Kustomize configs
+│   │   ├── kustomization.yaml
+│   │   ├── postgres.yaml
+│   │   └── rabbitmq.yaml
+│   └── overlays/
+│       ├── dev/                  # Local development overlay
+│       │   ├── kustomization.yaml
+│       │   ├── namespace.yaml
+│       │   └── patch-postgres.yaml
+│       └── prod/                 # Production overlay
+│           ├── kustomization.yaml
+│           ├── namespace.yaml
+│           ├── patch-postgres.yaml
+│           └── patch-rabbitmq.yaml
+└── argo-applications/
+    ├── dev-app.yaml              # ArgoCD Application -> dev overlay
+    └── prod-app.yaml             # ArgoCD Application -> prod overlay
 ```
 
-## How Each Layer Is Used 
-### clusters/
-Entry point for GitOps controllers (Argo CD / Flux).
-- Defines what is installed in each cluster
-- Never reused across environments 
+---
 
-Example responsibility:
-- namespaces
-- which apps are deployed 
-- which overlays are active 
+## How Each Layer Is Used
 
-### platform/
-Cluster-wide shared capabilities
-Includes: 
-- Istio control plane 
-- IngressGateway 
-- AuthN/AuthZ (OAuth2 Proxy / Keycloak later)
+### `k8s/base`
 
-This replaces the legacy **apigw module** completely.
+* Base Kustomize manifests for apps and infra.
+* Defines images, ports, and probes.
 
+### `k8s/overlays/dev`
 
-### infa/
-Runtime depdnencies
-**local-deps**
-- Used for **developer experience only**
-- Port-forward friendly 
-- No Aurora application images 
-- CI pipelines may depend on this 
+* Local development overlay.
+* Default `application.yml` with `localhost` dependencies.
+* Uses port-forwarded services only.
 
-**prod-deps**
-- Real backing services 
-- Stable DNS: `*.svc.cluster.local`
-- Used only in prod clusters 
+### `k8s/overlays/prod`
 
-### apps/aurora
-Application deployment manifests.
-- `base` -> image, ports, probes
-- `overlays/dev` -> localhost / mock friendly 
-- `overlays/prod` -> real service discovery 
+* Production overlay.
+* Default `application-prod.yml` with `svc.cluster.local` service discovery.
+* Deploys Aurora app images and stable backing services.
 
+### `argo-applications/`
 
-Example: 
-- `application.yml` -> dev 
-- `application-prod.yml` -> prod 
+* Defines which overlay to sync per environment using ArgoCD.
+* Example:
 
+  * `dev-app.yaml` → dev overlay
+  * `prod-app.yaml` → prod overlay
 
-## CI vs GitOps Boundary 
-### Stage: CI 
-- build image, run tests, push image 
+### `terraform/` (optional)
 
-### Stage: GitOps 
-- declare which image version deploys and runs
+* Infrastructure provisioning for cloud or local clusters.
+* Can be used to deploy namespaces, storage, or cluster components if desired.
 
+---
 
-CI updates image tags or kustomize patches, not clusters directly 
+## CI vs GitOps Boundary
 
+### CI Stage
 
-### Typical Workflow 
-- Developer runs local Aurora services 
-- Uses `infra/local-deps` via port-forward 
-- CI builds Aurora image 
-- GitOps repo updated with new image tag 
-- Argo CD syncs prod cluster 
+* Build images, run tests, push image tags.
+* No direct cluster deployment.
 
+### GitOps Stage
 
-### Why This Structure Works Well 
-- Clean mental model 
-- No coupling between CI and runtime 
-- Easy Istio traffic experiments 
-- Easy Git diff & rollback 
+* Declare which image version to deploy in overlays.
+* ArgoCD syncs clusters automatically from Git.
+* Ensures **environment isolation**, **auditability**, and **rollbacks**.
 
+---
 
-## LICENSE 
-- [LICENSE](./LICENSE)
+## Minimal MVP Workflow
+
+1. Developer starts local Aurora services (dev overlay).
+2. Uses `infra/local-deps` via port-forward for dependencies.
+3. CI builds Aurora images and pushes to registry.
+4. GitOps repo updated with new image tags.
+5. ArgoCD syncs the production cluster (prod overlay).
+
+---
+
+## Why This Structure Works
+
+* Clear mental model between **build**, **deployment**, and **runtime**.
+* Clean separation between **local dev** and **prod clusters**.
+* Easy **Istio traffic experiments** in prod and dev.
+* Git diffs reflect **actual runtime changes**, simplifying rollbacks.
+
+---
+
+## LICENSE
+
+* [LICENSE](./LICENSE)
