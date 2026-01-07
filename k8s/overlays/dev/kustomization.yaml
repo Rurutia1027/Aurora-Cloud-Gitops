@@ -1,0 +1,9 @@
+namespace: aurora
+
+resources:
+  - ../../base
+  - namespace.yaml
+
+patchesStrategicMerge:
+  - patch-postgres.yaml
+  - patch-rabbitmq.yaml

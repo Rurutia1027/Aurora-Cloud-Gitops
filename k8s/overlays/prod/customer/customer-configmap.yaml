@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: customer-config
+  namespace: aurora-prod
+data:
+  # Application basic info
+  APP_NAME: "customer"
+  SERVER_PORT: "8080"
+
+  # Database connection
+  DB_URL: "jdbc:postgresql://postgres.aurora-prod.svc.cluster.local:5432/customer"
+  DB_USERNAME: "admin"
+  DB_PASSWORD: "admin"
+
+  # JPA/Hibernate settings
+  JPA_DDL_AUTO: "none"
+  JPA_SHOW_SQL: "false"
+
+  # RabbitMQ connection
+  RABBITMQ_ADDR: "amqp://rabbitmq.aurora-prod.svc.cluster.local:5672"
+
+  # RabbitMQ topology
+  RABBITMQ_EXCHANGE_INTERNAL: "internal.exchange"
+  RABBITMQ_QUEUE_NOTIFICATION: "notification.queue"
+  RABBITMQ_ROUTING_KEY_INTERNAL_NOTIFICATION: "internal.notification.routing-key"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+
+  # Management endpoint
+  MANAGEMENT_ENDPOINTS_WEB_INCLUDE: "health,info"
+  MANAGEMENT_HEALTH_SHOW_DETAILS: "always"

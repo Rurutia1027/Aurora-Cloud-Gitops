@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud
+  namespace: aurora-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud
+  template:
+    metadata:
+      labels:
+        app: fraud
+    spec:
+      containers:
+        - name: fraud
+          image: nanachi1027/aurora-fraud:latest
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: fraud-config      

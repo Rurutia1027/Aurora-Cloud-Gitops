@@ -1,0 +1,7 @@
+# overlays/prod/fraud/kustomization.yaml
+namespace: aurora-prod
+
+resources:
+  - fraud-deployment.yaml
+  - fraud-service.yaml
+  - fraud-configmap.yaml
