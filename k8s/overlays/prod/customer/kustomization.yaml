@@ -1,0 +1,7 @@
+# overlays/prod/customer/kustomization.yaml
+namespace: aurora-prod
+
+resources:
+  - customer-deployment.yaml
+  - customer-service.yaml
+  - customer-configmap.yaml

@@ -1,0 +1,18 @@
+namespace: aurora-prod
+
+resources:
+  # namespace create first 
+  - namespace.yaml
+  
+  # then load base yamls for infra components 
+  - ../../base
+  
+  # then create local declared project apps yamls 
+  - fraud/
+  - customer/
+  - notification/
+
+# prod customzied patches for infra yaml declarations -- no need for now 
+# patchesStrategicMerge:
+#   - patch-postgres.yaml
+#   - patch-rabbitmq.yaml

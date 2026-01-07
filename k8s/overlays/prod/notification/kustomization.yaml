@@ -1,0 +1,7 @@
+# overlays/prod/fraud/kustomization.yaml
+namespace: aurora-prod
+
+resources:
+  - notification-deployment.yaml
+  - notification-service.yaml
+  - notification-configmap.yaml
